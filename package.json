@@ -1,0 +1,139 @@
+{
+  "name": "shieldly",
+  "displayName": "Shieldly — AI-Powered Security Analyzer for AWS",
+  "description": "AI-Powered Security Analysis for AWS IAM policies, CloudFormation templates, and resource policies. Find risks before they reach production.",
+  "version": "0.1.6",
+  "publisher": "shieldly",
+  "license": "MIT",
+  "galleryBanner": {
+    "color": "#0b0f19",
+    "theme": "dark"
+  },
+  "qna": "https://www.shieldly.io/docs/api",
+  "sponsor": {
+    "url": "https://www.shieldly.io/pricing"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "aws",
+    "iam",
+    "security",
+    "policy",
+    "cloudformation",
+    "ai",
+    "shieldly"
+  ],
+  "icon": "images/icon.png",
+  "homepage": "https://www.shieldly.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shieldly-io/vscode-extension"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:json",
+    "onLanguage:yaml",
+    "onCommand:shieldly.analyzeCurrentFile",
+    "onCommand:shieldly.scanDirectory",
+    "onCommand:shieldly.setApiKey",
+    "onCommand:shieldly.clearApiKey"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "shieldly.analyzeCurrentFile",
+        "title": "Shieldly: Run AI-Powered Analysis",
+        "category": "Shieldly"
+      },
+      {
+        "command": "shieldly.setApiKey",
+        "title": "Shieldly: Set API Key",
+        "category": "Shieldly"
+      },
+      {
+        "command": "shieldly.clearApiKey",
+        "title": "Shieldly: Clear API Key (reset to demo)",
+        "category": "Shieldly"
+      },
+      {
+        "command": "shieldly.showLastResult",
+        "title": "Shieldly: Show Last Result",
+        "category": "Shieldly"
+      },
+      {
+        "command": "shieldly.scanDirectory",
+        "title": "Shieldly: Scan CDK/CF Templates in Folder",
+        "category": "Shieldly"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "shieldly.analyzeCurrentFile",
+          "when": "resourceExtname == .json || resourceExtname == .yaml || resourceExtname == .yml",
+          "group": "1_modification"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "shieldly.analyzeCurrentFile",
+          "when": "resourceExtname == .json || resourceExtname == .yaml || resourceExtname == .yml",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "shieldly.analyzeCurrentFile",
+          "when": "resourceExtname == .json || resourceExtname == .yaml || resourceExtname == .yml",
+          "group": "1_modification"
+        },
+        {
+          "command": "shieldly.scanDirectory",
+          "when": "explorerResourceIsFolder",
+          "group": "1_modification"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "shieldly.analyzeCurrentFile",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorTextFocus && (resourceExtname == .json || resourceExtname == .yaml || resourceExtname == .yml)"
+      }
+    ],
+    "configuration": {
+      "title": "Shieldly",
+      "properties": {
+        "shieldly.apiUrl": {
+          "type": "string",
+          "default": "https://api.shieldly.io",
+          "description": "Shieldly API base URL (override for self-hosted or dev)"
+        },
+        "shieldly.autoAnalyze": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically analyze policy files (.json, .yaml, .yml) on open and save. Requires an API key (does not consume free demo analyses)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --minify",
+    "build:dev": "esbuild src/extension.js --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
+    "watch": "esbuild src/extension.js --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap --watch",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0"
+  },
+  "dependencies": {}
+}
