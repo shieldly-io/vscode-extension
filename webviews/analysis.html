@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shieldly AI-Powered Security Analysis</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: var(--vscode-font-family, system-ui, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+      color: var(--vscode-foreground);
+      background: var(--vscode-editor-background);
+      margin: 0;
+      padding: 16px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--vscode-foreground);
+    }
+    .ai-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: var(--vscode-badge-background, #0078d4);
+      color: var(--vscode-badge-foreground, #fff);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    /* ── Loading ── */
+    #loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 0;
+      gap: 14px;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--vscode-focusBorder, #007acc33);
+      border-top-color: var(--vscode-focusBorder, #007acc);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      color: var(--vscode-descriptionForeground);
+      font-size: 13px;
+    }
+    .loading-elapsed {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      opacity: 0.65;
+    }
+
+    /* ── Score ring ── */
+    #result { display: none; }
+    #score-arc { transition: stroke-dashoffset 0.6s ease-in-out, stroke 0.3s ease; }
+    .score-section {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: var(--vscode-sideBar-background, rgba(0,0,0,0.1));
+      border-radius: 8px;
+    }
+    .score-ring {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+    }
+    .score-ring svg { transform: rotate(-90deg); }
+    .score-ring-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .score-number {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--vscode-foreground);
+    }
+    .score-label {
+      font-size: 9px;
+      color: var(--vscode-descriptionForeground);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .score-meta { flex: 1; min-width: 0; }
+    .score-meta-filename {
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .risk-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 99px;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .risk-Critical { background: #c72e2e; }
+    .risk-High     { background: #b55800; }
+    .risk-Medium   { background: #856a00; }
+    .risk-Low      { background: #2e7d32; }
+    .score-summary {
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    /* ── Demo notice ── */
+    #demo-notice {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-bottom: 16px;
+      background: var(--vscode-inputValidation-infoBackground, rgba(0,122,204,0.1));
+      border: 1px solid var(--vscode-inputValidation-infoBorder, #007acc);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    #demo-notice a {
+      color: var(--vscode-textLink-foreground, #007acc);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    #demo-notice a:hover { text-decoration: underline; }
+
+    /* ── Limit reached ── */
+    #limit-reached {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+      background: var(--vscode-inputValidation-warningBackground, rgba(181,88,0,0.1));
+      border: 1px solid var(--vscode-inputValidation-warningBorder, #b55800);
+      border-radius: 8px;
+    }
+    .limit-title { font-size: 14px; font-weight: 600; }
+    .limit-desc { font-size: 12px; color: var(--vscode-descriptionForeground); }
+    .limit-options { display: flex; flex-direction: column; gap: 8px; }
+    .limit-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+    }
+    .limit-option:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .limit-option-icon { font-size: 18px; flex-shrink: 0; }
+    .limit-option-text .limit-option-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .limit-option-text .limit-option-desc {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    /* ── AI Summary ── */
+    .ai-summary {
+      font-size: 12px;
+      color: var(--vscode-foreground);
+      line-height: 1.6;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      background: var(--vscode-sideBar-background, rgba(0,0,0,0.06));
+      border-radius: 6px;
+      display: none;
+    }
+    .ai-grade {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 6px;
+    }
+
+    /* ── Positives ── */
+    .positives-list { display: flex; flex-direction: column; gap: 4px; }
+    .positive-item {
+      font-size: 12px;
+      color: var(--vscode-foreground);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      line-height: 1.5;
+    }
+    .positive-check {
+      color: #3fb950;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ── Findings ── */
+    .section-header {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--vscode-descriptionForeground);
+      margin: 18px 0 8px;
+    }
+    .findings-list { display: flex; flex-direction: column; gap: 8px; }
+    .finding-card {
+      padding: 10px 12px;
+      border-left: 3px solid;
+      background: var(--vscode-sideBar-background, rgba(0,0,0,0.08));
+      border-radius: 0 6px 6px 0;
+    }
+    .finding-Critical { border-left-color: #c72e2e; }
+    .finding-High     { border-left-color: #e97a00; }
+    .finding-Medium   { border-left-color: #c9a800; }
+    .finding-Low      { border-left-color: #3794ff; }
+
+    .finding-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .finding-sev {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .sev-Critical { background: #c72e2e; }
+    .sev-High     { background: #b55800; }
+    .sev-Medium   { background: #856a00; }
+    .sev-Low      { background: #1e6b3e; }
+
+    .finding-title {
+      font-size: 12px;
+      font-weight: 600;
+      flex: 1;
+      line-height: 1.4;
+    }
+    .finding-desc {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+    .finding-solution {
+      font-size: 11px;
+      color: var(--vscode-foreground);
+      line-height: 1.5;
+      margin-top: 5px;
+      padding: 5px 8px;
+      background: rgba(55,148,255,0.08);
+      border-left: 2px solid var(--vscode-textLink-foreground, #007acc);
+      border-radius: 0 3px 3px 0;
+    }
+    .finding-solution-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-textLink-foreground, #007acc);
+      margin-bottom: 2px;
+    }
+    .finding-resource {
+      font-size: 10px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      color: var(--vscode-descriptionForeground);
+      margin-top: 4px;
+      opacity: 0.75;
+    }
+
+    /* ── Remediated policy ── */
+    .remediated-section {
+      margin-top: 20px;
+      padding: 12px;
+      background: var(--vscode-sideBar-background, rgba(0,0,0,0.08));
+      border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
+      border-radius: 6px;
+    }
+    .remediated-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .remediated-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .copy-btn {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+      color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+      border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.3));
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--vscode-list-hoverBackground); }
+    .remediated-code {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 10px;
+      color: var(--vscode-foreground);
+      line-height: 1.5;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre;
+      background: var(--vscode-editor-background);
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.2));
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 28px 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 13px;
+    }
+    .empty-state-icon { font-size: 28px; margin-bottom: 8px; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.2));
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    /* biome-ignore lint/style/noDescendingSpecificity: webview link styling, source order intentional */
+    .footer a {
+      color: var(--vscode-textLink-foreground, #007acc);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    /* biome-ignore lint/style/noDescendingSpecificity: webview link styling, source order intentional */
+    .footer a:hover { text-decoration: underline; }
+    .footer-sep { opacity: 0.4; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <span class="header-title">AI-Powered Security Analysis</span>
+    <span class="ai-badge">Shieldly</span>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Analyzing <strong id="loading-filename"></strong>…</div>
+    <div class="loading-elapsed" id="loading-elapsed"></div>
+  </div>
+
+  <!-- Demo notice -->
+  <div id="demo-notice">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8.01" stroke-width="2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
+    <span id="demo-notice-text">Demo mode — <strong id="demo-uses-left"></strong> free <span id="demo-uses-word">analysis</span> remaining.</span>
+    <a id="demo-upgrade-link">Get full access →</a>
+  </div>
+
+  <!-- Limit reached -->
+  <div id="limit-reached">
+    <div class="limit-title" id="limit-title">Daily analysis limit reached</div>
+    <div class="limit-desc" id="limit-desc">You've used all included analyses for today. Choose an option to continue:</div>
+    <div class="limit-options">
+      <a class="limit-option" id="opt-signup">
+        <span class="limit-option-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Sign up free"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></span>
+        <div class="limit-option-text">
+          <div class="limit-option-title">Sign up free</div>
+          <div class="limit-option-desc">Create a free account for higher limits and analysis history.</div>
+        </div>
+      </a>
+      <a class="limit-option" id="opt-payg">
+        <span class="limit-option-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Pay as you go"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+        <div class="limit-option-text">
+          <div class="limit-option-title">Enable Pay-as-you-go</div>
+          <div class="limit-option-desc">$0.09 per analysis. No subscription needed.</div>
+        </div>
+      </a>
+      <a class="limit-option" id="opt-upgrade">
+        <span class="limit-option-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Upgrade"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></span>
+        <div class="limit-option-text">
+          <div class="limit-option-title">Upgrade your plan</div>
+          <div class="limit-option-desc">Higher daily limits, history, and auto-mode.</div>
+        </div>
+      </a>
+      <a class="limit-option" id="opt-wait">
+        <span class="limit-option-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Wait"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+        <div class="limit-option-text">
+          <div class="limit-option-title">Wait for reset</div>
+          <div class="limit-option-desc">Limits reset at midnight UTC.</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result">
+    <div class="score-section">
+      <div class="score-ring">
+        <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
+          <circle cx="36" cy="36" r="28" stroke="var(--vscode-panel-border, rgba(128,128,128,0.25))" stroke-width="6" fill="none"/>
+          <circle id="score-arc" cx="36" cy="36" r="28" stroke="#3794ff" stroke-width="6" fill="none"
+            stroke-dasharray="175.93" stroke-dashoffset="175.93" stroke-linecap="round"/>
+        </svg>
+        <div class="score-ring-text">
+          <span class="score-number" id="score-number">—</span>
+          <span class="score-label">/ 100</span>
+        </div>
+      </div>
+      <div class="score-meta">
+        <div class="score-meta-filename" id="result-filename"></div>
+        <div id="risk-badge" class="risk-badge risk-Low">Low Risk</div>
+        <div class="score-summary" id="score-summary"></div>
+      </div>
+    </div>
+
+    <div class="ai-summary" id="ai-summary">
+      <div id="ai-summary-text"></div>
+      <div class="ai-grade" id="ai-grade"></div>
+    </div>
+
+    <div class="section-header" id="positives-header" style="display:none">What's Good</div>
+    <div class="positives-list" id="positives-list"></div>
+
+    <div class="section-header" id="findings-header">Findings</div>
+    <div class="findings-list" id="findings-list"></div>
+
+    <div class="remediated-section" id="remediated-section" style="display:none">
+      <div class="remediated-header">
+        <span class="remediated-title">AI-Generated Fix</span>
+        <button type="button" class="copy-btn" id="copy-remediated-btn">Copy</button>
+      </div>
+      <pre class="remediated-code" id="remediated-code"></pre>
+    </div>
+  </div>
+
+  <div class="footer">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span>Your policy content is never stored — privacy-first analysis</span>
+    <span class="footer-sep">·</span>
+    <a id="footer-docs-link">Docs</a>
+    <span class="footer-sep">·</span>
+    <a id="footer-site-link">shieldly.io</a>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    const CIRCUMFERENCE = 2 * Math.PI * 28; // 175.93
+
+    // Elapsed timer for loading state
+    let _elapsedTimer = null;
+    let _loadStart = 0;
+
+    function startElapsedTimer() {
+      stopElapsedTimer();
+      _loadStart = Date.now();
+      const el = document.getElementById('loading-elapsed');
+      el.textContent = '';
+      _elapsedTimer = setInterval(() => {
+        const secs = Math.round((Date.now() - _loadStart) / 1000);
+        el.textContent = `${secs}s elapsed — AI-Powered analysis in progress…`;
+      }, 1000);
+    }
+
+    function stopElapsedTimer() {
+      if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+      const el = document.getElementById('loading-elapsed');
+      if (el) el.textContent = '';
+    }
+
+    function scoreColor(score) {
+      if (score >= 80) return '#2ea043';
+      if (score >= 60) return '#e3a008';
+      if (score >= 40) return '#e97a00';
+      return '#c72e2e';
+    }
+
+    function setView(name) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('limit-reached').style.display = 'none';
+      // Hide the demo notice on every view change; the demoNotice message
+      // re-shows it after a demo result so it never lingers on authenticated runs.
+      document.getElementById('demo-notice').style.display = 'none';
+      if (name === 'loading') {
+        document.getElementById('loading').style.display = 'flex';
+        startElapsedTimer();
+      } else {
+        stopElapsedTimer();
+        if (name === 'result') document.getElementById('result').style.display = 'block';
+        else if (name === 'limit') document.getElementById('limit-reached').style.display = 'flex';
+      }
+    }
+
+    function renderResult(data) {
+      setView('result');
+
+      // Score ring
+      const score = (data.score != null) ? Number(data.score) : null;
+      const scoreEl = document.getElementById('score-number');
+      const arcEl = document.getElementById('score-arc');
+      if (score !== null && !Number.isNaN(score)) {
+        scoreEl.textContent = score;
+        const offset = CIRCUMFERENCE - (score / 100) * CIRCUMFERENCE;
+        arcEl.style.strokeDashoffset = offset;
+        arcEl.style.stroke = scoreColor(score);
+      } else {
+        scoreEl.textContent = '—';
+        arcEl.style.strokeDashoffset = CIRCUMFERENCE;
+      }
+
+      // Risk badge
+      const risk = data.riskLevel || data.overallRisk || 'Low';
+      const badge = document.getElementById('risk-badge');
+      badge.className = `risk-badge risk-${risk}`;
+      badge.textContent = `${risk} Risk`;
+
+      // Filename / label
+      document.getElementById('result-filename').textContent = data.label ? `${data.fileName} · ${data.label}` : (data.fileName || '');
+
+      // Findings count in score section
+      const findings = data.findings || [];
+      document.getElementById('score-summary').textContent =
+        findings.length
+          ? `${findings.length} finding${findings.length !== 1 ? 's' : ''} — scroll to view`
+          : 'No findings — policy looks clean';
+
+      // AI summary + grade
+      const summaryEl = document.getElementById('ai-summary');
+      const summaryText = data.summary || '';
+      if (summaryText) {
+        document.getElementById('ai-summary-text').textContent = summaryText;
+        const gradeEl = document.getElementById('ai-grade');
+        gradeEl.textContent = data.aiGrade ? `Analyzed by ${data.aiGrade}` : '';
+        summaryEl.style.display = 'block';
+      } else {
+        summaryEl.style.display = 'none';
+      }
+
+      // Positives (what's good)
+      const positives = data.positives || [];
+      const posHeader = document.getElementById('positives-header');
+      const posList = document.getElementById('positives-list');
+      posList.innerHTML = '';
+      if (positives.length > 0) {
+        posHeader.style.display = '';
+        for (const p of positives) {
+          const item = document.createElement('div');
+          item.className = 'positive-item';
+          const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          check.setAttribute('width', '12');
+          check.setAttribute('height', '12');
+          check.setAttribute('viewBox', '0 0 24 24');
+          check.setAttribute('fill', 'none');
+          check.setAttribute('stroke', '#3fb950');
+          check.setAttribute('stroke-width', '2.5');
+          check.setAttribute('stroke-linecap', 'round');
+          check.setAttribute('stroke-linejoin', 'round');
+          check.setAttribute('aria-hidden', 'true');
+          check.setAttribute('class', 'positive-check');
+          check.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+          item.appendChild(check);
+          const txt = document.createElement('span');
+          txt.textContent = p;
+          item.appendChild(txt);
+          posList.appendChild(item);
+        }
+      } else {
+        posHeader.style.display = 'none';
+      }
+
+      // Findings
+      const header = document.getElementById('findings-header');
+      const list = document.getElementById('findings-list');
+      list.innerHTML = '';
+
+      if (!findings.length) {
+        header.style.display = 'none';
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML =
+          '<div class="empty-state-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="No findings"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>No security findings detected.';
+        list.appendChild(empty);
+      } else {
+        header.style.display = '';
+        header.textContent = `Findings (${findings.length})`;
+
+        for (const f of findings) {
+          const sev = f.severity || 'Low';
+          const card = document.createElement('div');
+          card.className = `finding-card finding-${sev}`;
+
+          const top = document.createElement('div');
+          top.className = 'finding-top';
+
+          const sevEl = document.createElement('span');
+          sevEl.className = `finding-sev sev-${sev}`;
+          sevEl.textContent = sev;
+          top.appendChild(sevEl);
+
+          const title = document.createElement('span');
+          title.className = 'finding-title';
+          title.textContent = f.title || f.description || 'Finding';
+          top.appendChild(title);
+          card.appendChild(top);
+
+          if (f.description && f.title && f.description !== f.title) {
+            const desc = document.createElement('div');
+            desc.className = 'finding-desc';
+            desc.textContent = f.description;
+            card.appendChild(desc);
+          }
+
+          if (f.remediation) {
+            const sol = document.createElement('div');
+            sol.className = 'finding-solution';
+            const lbl = document.createElement('div');
+            lbl.className = 'finding-solution-label';
+            lbl.textContent = 'Solution';
+            sol.appendChild(lbl);
+            const txt = document.createElement('div');
+            txt.textContent = f.remediation;
+            sol.appendChild(txt);
+            card.appendChild(sol);
+          }
+
+          if (f.resource && f.resource !== '*') {
+            const res = document.createElement('div');
+            res.className = 'finding-resource';
+            res.textContent = f.resource;
+            card.appendChild(res);
+          }
+
+          list.appendChild(card);
+        }
+      }
+
+      // Remediated policy / AI-generated fix
+      const remSec = document.getElementById('remediated-section');
+      const remCode = document.getElementById('remediated-code');
+      if (data.remediatedPolicy && typeof data.remediatedPolicy === 'object') {
+        remCode.textContent = JSON.stringify(data.remediatedPolicy, null, 2);
+        remSec.style.display = 'block';
+      } else {
+        remSec.style.display = 'none';
+      }
+    }
+
+    function renderLimit(info) {
+      setView('limit');
+      const isDemo = !!info?.demo;
+      // Demo cap is lifetime (no reset) and the user has no account yet — show a
+      // signup CTA and hide the daily-plan options. Authenticated daily-cap users
+      // see PAYG / upgrade / wait-for-reset instead.
+      document.getElementById('limit-title').textContent =
+        isDemo ? 'Free demo limit reached' : 'Daily analysis limit reached';
+      document.getElementById('limit-desc').textContent =
+        isDemo
+          ? "You've used all your free demo analyses. Sign up free to keep going."
+          : "You've used all included analyses for today. Choose an option to continue:";
+      document.getElementById('opt-signup').style.display = isDemo ? 'flex' : 'none';
+      document.getElementById('opt-payg').style.display = isDemo ? 'none' : 'flex';
+      document.getElementById('opt-upgrade').style.display = isDemo ? 'none' : 'flex';
+      document.getElementById('opt-wait').style.display = isDemo ? 'none' : 'flex';
+    }
+
+    // Link handlers
+    document.getElementById('demo-upgrade-link').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io/sign-up' });
+    });
+    document.getElementById('opt-signup').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io/sign-up' });
+    });
+    document.getElementById('opt-payg').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io/app/settings#payg' });
+    });
+    document.getElementById('opt-upgrade').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io/pricing' });
+    });
+    document.getElementById('opt-wait').addEventListener('click', () => {
+      vscode.postMessage({ command: 'closePanel' });
+    });
+    document.getElementById('footer-docs-link').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io/docs/api' });
+    });
+    document.getElementById('copy-remediated-btn').addEventListener('click', () => {
+      const text = document.getElementById('remediated-code').textContent;
+      if (text) {
+        navigator.clipboard.writeText(text).catch(() => {
+          vscode.postMessage({ command: 'copyText', text });
+        });
+        const btn = document.getElementById('copy-remediated-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      }
+    });
+    document.getElementById('footer-site-link').addEventListener('click', () => {
+      vscode.postMessage({ command: 'openUrl', url: 'https://www.shieldly.io' });
+    });
+
+    window.addEventListener('message', (event) => {
+      const msg = event.data;
+
+      if (msg.type === 'result') {
+        const data = msg.data;
+
+        if (data.loading) {
+          setView('loading');
+          document.getElementById('loading-filename').textContent = data.fileName || 'file';
+          return;
+        }
+
+        if (data.limitReached) {
+          renderLimit(data);
+          return;
+        }
+
+        renderResult(data);
+      }
+
+      if (msg.type === 'demoNotice') {
+        const left = msg.usesLeft;
+        if (left >= 0) {
+          document.getElementById('demo-uses-left').textContent = left;
+          document.getElementById('demo-uses-word').textContent = left === 1 ? 'analysis' : 'analyses';
+          document.getElementById('demo-notice').style.display = 'flex';
+        }
+      }
+    });
+
+    // Signal extension that the webview script is loaded and ready to receive messages.
+    vscode.postMessage({ command: 'ready' });
+  </script>
+</body>
+</html>
